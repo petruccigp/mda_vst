@@ -11,7 +11,7 @@ AudioEffect *createEffectInstance(audioMasterCallback audioMaster)
 mdaDelay::mdaDelay(audioMasterCallback audioMaster)	: AudioEffectX(audioMaster, 1, 6)	// programs, parameters
 {
   //inits here!
-  fParam0 = 0.50f; //left delay
+  left_delay= 0.50f; //left delay
   fParam1 = 0.27f; //right ratio
   fParam2 = 0.70f; //feedback
   fParam3 = 0.50f; //tone
@@ -44,15 +44,16 @@ void mdaDelay::setParameter(VstInt32 index, float value)
 
   switch(index)
   {
-    case 0: fParam0 = value; break;
+    case 0: left_delay = value; break;
     case 1: fParam1 = value; break;
     case 2: fParam2 = value; break;
     case 3: fParam3 = value; break;
     case 4: fParam4 = value; break;
     case 5: fParam5 = value; break;
  }
+
   //calcs here
-  ldel = (VstInt32)(size * fParam0 * fParam0);
+  ldel = (VstInt32)(size * left_delay * left_delay);
   if(ldel<4) ldel=4;
   
   switch(int(fParam1 * 17.9f)) //fixed left/right ratios
@@ -68,7 +69,8 @@ void mdaDelay::setParameter(VstInt32 index, float value)
     case   9: tmp = 2.0000f; break;
     default: tmp = 4.0f * fParam1; break; //variable ratio
   }
-  rdel = (VstInt32)(size * fParam0 * fParam0 * tmp);
+
+  rdel = (VstInt32)(size * left_delay * left_delay * tmp);
   if(rdel>size) rdel=size;
   if(rdel<4) rdel=4;
 
@@ -131,7 +133,7 @@ float mdaDelay::getParameter(VstInt32 index)
 
   switch(index)
   {
-    case 0: v = fParam0; break;
+    case 0: v = left_delay; break;
     case 1: v = fParam1; break;
     case 2: v = fParam2; break;
     case 3: v = fParam3; break;
@@ -182,49 +184,73 @@ void mdaDelay::getParameterLabel(VstInt32 index, char *label)
 }
 
 //--------------------------------------------------------------------------------
-// process
-
+// Processes inputs (stereo) with a given number of sampleFrames samples, and outputs it to outputs (stereo)
 void mdaDelay::process(float **inputs, float **outputs, VstInt32 sampleFrames)
 {
+
+	// Input and outputs (stereo)
 	float *in1 = inputs[0];
 	float *in2 = inputs[1];
 	float *out1 = outputs[0];
 	float *out2 = outputs[1];
-	float a, b, c, d, ol, or_, w=wet, y=dry, fb=fbk;
-  float lx=lmix, hx=hmix, f=fil, f0=fil0, tmp;
-  VstInt32 i=ipos, l, r, s=size;
 
-  l = (i + ldel) % (s + 1);
-  r = (i + rdel) % (s + 1);
+	float current_input1, current_input2, c, d, ol, or_;
 
-  --in1;	
-	--in2;	
+	// Variables to store the current parameters of the plugin
+	float wet_ratio = wet, dry_ratio = dry, feedback = fbk;
+	
+	float lx = lmix, hx = hmix, f = fil, f0 = fil0, tmp;
+
+	VstInt32 i = ipos, l, r, s = size;
+
+	// ??? 
+	l = (i + ldel) % (s + 1);
+	r = (i + rdel) % (s + 1);
+
+	// Return pointer back, trick so the ++in1 works in the loop
+	--in1;
+	--in2;
 	--out1;
 	--out2;
-  while(--sampleFrames >= 0)
+
+	// For all the samples in the current frame
+	while (--sampleFrames >= 0)
 	{
-		a = *++in1; 
-    b = *++in2;
+
+		// Get the current sample, increment the pointer of the inputs
+		current_input1 = *++in1;
+		current_input2 = *++in2;
+
 		c = out1[1];
-		d = out2[1]; 
+		d = out2[1];
 
-    ol = *(buffer + l);
-    or_ = *(buffer + r);
-    
-    tmp = w * (a + b) + fb * (ol + or_); 
-    f0 = f * (f0 - tmp) + tmp;   
-    *(buffer + i) = lx * f0 + hx * tmp; 
+		ol = *(buffer + l);
+		or_ = *(buffer + r);
 
-    i--; if(i<0) i=s;
-    l--; if(l<0) l=s;
-    r--; if(r<0) r=s;
+		// Mix input and feedback
+		tmp = wet_ratio * (current_input1 + current_input2) + feedback * (ol + or_);
 
-    *++out1 = c + y * a + ol; 
-		*++out2 = d + y * b + or_; 
+		// Low pass filter
+		f0 = f * (f0 - tmp) + tmp;
+
+		// Delay input
+		*(buffer + i) = lx * f0 + hx * tmp;
+
+		i--; if (i < 0) i = s;
+		l--; if (l < 0) l = s;
+		r--; if (r < 0) r = s;
+
+		// Mix wet and dry
+		*++out1 = c + dry_ratio * a + ol;
+		*++out2 = d + dry_ratio * b + or_;
 	}
-  ipos = i;
-  if(fabs(f0)<1.0e-10) fil0=0.0f; else fil0=f0; 
+	ipos = i;
+	if (fabs(f0) < 1.0e-10) fil0 = 0.0f; else fil0 = f0;
 }
+
+
+
+
 
 void mdaDelay::processReplacing(float **inputs, float **outputs, VstInt32 sampleFrames)
 {
@@ -232,36 +258,36 @@ void mdaDelay::processReplacing(float **inputs, float **outputs, VstInt32 sample
 	float *in2 = inputs[1];
 	float *out1 = outputs[0];
 	float *out2 = outputs[1];
-	float a, b, ol, or_, w=wet, y=dry, fb=fbk;
-  float lx=lmix, hx=hmix, f=fil, f0=fil0, tmp;
-  VstInt32 i=ipos, l, r, s=size;
+	float a, b, ol, or_, w = wet, y = dry, fb = fbk;
+	float lx = lmix, hx = hmix, f = fil, f0 = fil0, tmp;
+	VstInt32 i = ipos, l, r, s = size;
 
-  l = (i + ldel) % (s + 1);
-  r = (i + rdel) % (s + 1);
+	l = (i + ldel) % (s + 1);
+	r = (i + rdel) % (s + 1);
 
-	--in1;	
-	--in2;	
+	--in1;
+	--in2;
 	--out1;
 	--out2;
-  while(--sampleFrames >= 0)
+	while (--sampleFrames >= 0)
 	{
 		a = *++in1;
-    b = *++in2;
+		b = *++in2;
 
-    ol = *(buffer + l); //delay outputs
-    or_ = *(buffer + r);
-    
-    tmp = w * (a + b) + fb * (ol + or_); //mix input & feedback
-    f0 = f * (f0 - tmp) + tmp;    //low-pass filter
-    *(buffer + i) = lx * f0 + hx * tmp; //delay input
+		ol = *(buffer + l); //delay outputs
+		or_ = *(buffer + r);
 
-    i--; if(i<0) i=s;
-    l--; if(l<0) l=s;
-    r--; if(r<0) r=s;
+		tmp = w * (a + b) + fb * (ol + or_); //mix input & feedback
+		f0 = f * (f0 - tmp) + tmp;    //low-pass filter
+		*(buffer + i) = lx * f0 + hx * tmp; //delay input
 
-    *++out1 = y * a + ol; //mix wet & dry
-		*++out2 = y * b + or_; 
+		i--; if (i < 0) i = s;
+		l--; if (l < 0) l = s;
+		r--; if (r < 0) r = s;
+
+		*++out1 = y * a + ol; //mix wet & dry
+		*++out2 = y * b + or_;
 	}
-  ipos = i;
-  if(fabs(f0)<1.0e-10) fil0=0.0f; else fil0=f0; //trap denormals
+	ipos = i;
+	if (fabs(f0) < 1.0e-10) fil0 = 0.0f; else fil0 = f0; //trap denormals
 }
