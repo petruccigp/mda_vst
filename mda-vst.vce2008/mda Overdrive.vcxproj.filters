@@ -1,0 +1,38 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="VST">
+      <UniqueIdentifier>{ecc0c43b-311e-4a8c-8061-d304c062dd20}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="..\vst\aeffect.h">
+      <Filter>VST</Filter>
+    </ClInclude>
+    <ClInclude Include="..\vst\aeffectx.h">
+      <Filter>VST</Filter>
+    </ClInclude>
+    <ClInclude Include="..\vst\aeffeditor.h">
+      <Filter>VST</Filter>
+    </ClInclude>
+    <ClInclude Include="..\vst\audioeffect.h">
+      <Filter>VST</Filter>
+    </ClInclude>
+    <ClInclude Include="..\vst\audioeffectx.h">
+      <Filter>VST</Filter>
+    </ClInclude>
+    <ClInclude Include="..\src\mdaOverdrive.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="..\vst\audioeffect.cpp">
+      <Filter>VST</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vst\audioeffectx.cpp">
+      <Filter>VST</Filter>
+    </ClCompile>
+    <ClCompile Include="..\vst\vstplugmain.cpp">
+      <Filter>VST</Filter>
+    </ClCompile>
+    <ClCompile Include="..\src\mdaOverdrive.cpp" />
+  </ItemGroup>
+</Project>
