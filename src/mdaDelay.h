@@ -35,10 +35,14 @@ protected:
 	float fParam5;
 	float fParam6;
 
-	float *buffer;               //delay
-	VstInt32 size, ipos, ldel, rdel; //delay max time, pointer, left time, right time
-	float wet, dry, fbk;         //wet & dry mix
-	float lmix, hmix, fil, fil0; //low & high mix, crossover filter coeff & buffer
+	float *buffer; // Delay buffer
+	VstInt32 max_delay_size; // Delay maximum time
+	VstInt32 ipos; // Delay pointer
+	VstInt32 ldel, rdel; // Delay time for left and right
+
+	float wet, dry, fbk; // Wet and dry mix, feedback
+	float lmix, hmix; // low & high mix 
+	float fil, fil0;  // crossover filter coeff & buffer
 
 	char programName[32];
 };

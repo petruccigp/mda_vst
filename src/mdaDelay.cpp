@@ -18,8 +18,8 @@ mdaDelay::mdaDelay(audioMasterCallback audioMaster)	: AudioEffectX(audioMaster, 
   fParam4 = 0.33f; //wet mix
   fParam5 = 0.50f; //output
 
-  size = 32766;  //set max delay time at max sample rate
-	buffer = new float[size + 2]; //spare just in case!
+  max_delay_size = 32766;  //set max delay time at max sample rate
+	buffer = new float[max_delay_size + 2]; //spare just in case!
   ipos = 0;
   fil0 = 0.0f;
 
@@ -53,7 +53,7 @@ void mdaDelay::setParameter(VstInt32 index, float value)
  }
 
   //calcs here
-  ldel = (VstInt32)(size * left_delay * left_delay);
+  ldel = (VstInt32)(max_delay_size * left_delay * left_delay);
   if(ldel<4) ldel=4;
   
   switch(int(fParam1 * 17.9f)) //fixed left/right ratios
@@ -70,8 +70,8 @@ void mdaDelay::setParameter(VstInt32 index, float value)
     default: tmp = 4.0f * fParam1; break; //variable ratio
   }
 
-  rdel = (VstInt32)(size * left_delay * left_delay * tmp);
-  if(rdel>size) rdel=size;
+  rdel = (VstInt32)(max_delay_size * left_delay * left_delay * tmp);
+  if(rdel>max_delay_size) rdel = max_delay_size;
   if(rdel<4) rdel=4;
 
   fil = fParam3;
@@ -104,7 +104,7 @@ mdaDelay::~mdaDelay()
 
 void mdaDelay::suspend()
 {
-	memset(buffer, 0, size * sizeof(float));
+	memset(buffer, 0, max_delay_size * sizeof(float));
 }
 
 void mdaDelay::setProgramName(char *name)
@@ -187,25 +187,32 @@ void mdaDelay::getParameterLabel(VstInt32 index, char *label)
 // Processes inputs (stereo) with a given number of sampleFrames samples, and outputs it to outputs (stereo)
 void mdaDelay::process(float **inputs, float **outputs, VstInt32 sampleFrames)
 {
-
 	// Input and outputs (stereo)
 	float *in1 = inputs[0];
 	float *in2 = inputs[1];
 	float *out1 = outputs[0];
 	float *out2 = outputs[1];
 
-	float current_input1, current_input2, c, d, ol, or_;
+	// Stores the current input in the loop
+	float current_input1, current_input2;
+
+	// Stores the current output in the loop
+	float current_output1, current_output2;
+
+	// ??
+	float ol, or_;
 
 	// Variables to store the current parameters of the plugin
 	float wet_ratio = wet, dry_ratio = dry, feedback = fbk;
 	
-	float lx = lmix, hx = hmix, f = fil, f0 = fil0, tmp;
+	float low_mix = lmix, high_mix = hmix;
+	float f = fil, f0 = fil0, tmp;
 
-	VstInt32 i = ipos, l, r, s = size;
+	VstInt32 i = ipos, l, r;
 
-	// ??? 
-	l = (i + ldel) % (s + 1);
-	r = (i + rdel) % (s + 1);
+	// Circular rotation in buffer
+	l = (i + ldel) % (max_delay_size + 1);
+	r = (i + rdel) % (max_delay_size + 1);
 
 	// Return pointer back, trick so the ++in1 works in the loop
 	--in1;
@@ -221,8 +228,8 @@ void mdaDelay::process(float **inputs, float **outputs, VstInt32 sampleFrames)
 		current_input1 = *++in1;
 		current_input2 = *++in2;
 
-		c = out1[1];
-		d = out2[1];
+		current_output1 = out1[1];
+		current_output2 = out2[1];
 
 		ol = *(buffer + l);
 		or_ = *(buffer + r);
@@ -234,15 +241,15 @@ void mdaDelay::process(float **inputs, float **outputs, VstInt32 sampleFrames)
 		f0 = f * (f0 - tmp) + tmp;
 
 		// Delay input
-		*(buffer + i) = lx * f0 + hx * tmp;
+		*(buffer + i) = low_mix * f0 + high_mix* tmp;
 
-		i--; if (i < 0) i = s;
-		l--; if (l < 0) l = s;
-		r--; if (r < 0) r = s;
+		i--; if (i < 0) i = max_delay_size;
+		l--; if (l < 0) l = max_delay_size;
+		r--; if (r < 0) r = max_delay_size;
 
 		// Mix wet and dry
-		*++out1 = c + dry_ratio * a + ol;
-		*++out2 = d + dry_ratio * b + or_;
+		*++out1 = current_output1 + dry_ratio * current_input1 + ol;
+		*++out2 = current_output2 + dry_ratio * current_input2 + or_;
 	}
 	ipos = i;
 	if (fabs(f0) < 1.0e-10) fil0 = 0.0f; else fil0 = f0;
@@ -260,7 +267,7 @@ void mdaDelay::processReplacing(float **inputs, float **outputs, VstInt32 sample
 	float *out2 = outputs[1];
 	float a, b, ol, or_, w = wet, y = dry, fb = fbk;
 	float lx = lmix, hx = hmix, f = fil, f0 = fil0, tmp;
-	VstInt32 i = ipos, l, r, s = size;
+	VstInt32 i = ipos, l, r, s = max_delay_size;
 
 	l = (i + ldel) % (s + 1);
 	r = (i + rdel) % (s + 1);
