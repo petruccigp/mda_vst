@@ -5,101 +5,101 @@
 
 AudioEffect *createEffectInstance(audioMasterCallback audioMaster)
 {
-  return new mdaDelay(audioMaster);
+	return new mdaDelay(audioMaster);
 }
 
-mdaDelay::mdaDelay(audioMasterCallback audioMaster)	: AudioEffectX(audioMaster, 1, 6)	// programs, parameters
+mdaDelay::mdaDelay(audioMasterCallback audioMaster) : AudioEffectX(audioMaster, 1, 6)	// programs, parameters
 {
-  //inits here!
-  left_delay= 0.50f; //left delay
-  fParam1 = 0.27f; //right ratio
-  fParam2 = 0.70f; //feedback
-  fParam3 = 0.50f; //tone
-  fParam4 = 0.33f; //wet mix
-  fParam5 = 0.50f; //output
+	//inits here!
+	left_delay = 0.50f; //left delay
+	fParam1 = 0.27f; //right ratio
+	fParam2 = 0.70f; //feedback
+	fParam3 = 0.50f; //tone
+	fParam4 = 0.33f; //wet mix
+	fParam5 = 0.50f; //output
 
-  max_delay_size = 32766;  //set max delay time at max sample rate
+	max_delay_size = 32766;  //set max delay time at max sample rate
 	buffer = new float[max_delay_size + 2]; //spare just in case!
-  ipos = 0;
-  fil0 = 0.0f;
+	ipos = 0;
+	fil0 = 0.0f;
 
-  setNumInputs(2);		  
-	setNumOutputs(2);		  
+	setNumInputs(2);
+	setNumOutputs(2);
 	setUniqueID('mday');  //identify here
-	DECLARE_VST_DEPRECATED(canMono) ();				      
-	canProcessReplacing();	
+	DECLARE_VST_DEPRECATED(canMono) ();
+	canProcessReplacing();
 	strcpy(programName, "Delay");
-	
-  suspend();		//flush buffer
-  setParameter(0, 0.5); 
+
+	suspend();		//flush buffer
+	setParameter(0, 0.5);
 }
 
 bool  mdaDelay::getProductString(char* text) { strcpy(text, "mda Delay"); return true; }
-bool  mdaDelay::getVendorString(char* text)  { strcpy(text, "mda"); return true; }
-bool  mdaDelay::getEffectName(char* name)    { strcpy(name, "Delay"); return true; }
+bool  mdaDelay::getVendorString(char* text) { strcpy(text, "mda"); return true; }
+bool  mdaDelay::getEffectName(char* name) { strcpy(name, "Delay"); return true; }
 
 void mdaDelay::setParameter(VstInt32 index, float value)
 {
 	float tmp;
 
-  switch(index)
-  {
-    case 0: left_delay = value; break;
-    case 1: fParam1 = value; break;
-    case 2: fParam2 = value; break;
-    case 3: fParam3 = value; break;
-    case 4: fParam4 = value; break;
-    case 5: fParam5 = value; break;
- }
+	switch (index)
+	{
+	case 0: left_delay = value; break;
+	case 1: fParam1 = value; break;
+	case 2: fParam2 = value; break;
+	case 3: fParam3 = value; break;
+	case 4: fParam4 = value; break;
+	case 5: fParam5 = value; break;
+	}
 
-  //calcs here
-  ldel = (VstInt32)(max_delay_size * left_delay * left_delay);
-  if(ldel<4) ldel=4;
-  
-  switch(int(fParam1 * 17.9f)) //fixed left/right ratios
-  {
-    case  17: tmp = 0.5000f; break;
-    case  16: tmp = 0.6667f; break;
-    case  15: tmp = 0.7500f; break;
-    case  14: tmp = 0.8333f; break;
-    case  13: tmp = 1.0000f; break;
-    case  12: tmp = 1.2000f; break;
-    case  11: tmp = 1.3333f; break;
-    case  10: tmp = 1.5000f; break;
-    case   9: tmp = 2.0000f; break;
-    default: tmp = 4.0f * fParam1; break; //variable ratio
-  }
+	//calcs here
+	ldel = (VstInt32)(max_delay_size * left_delay * left_delay);
+	if (ldel < 4) ldel = 4;
 
-  rdel = (VstInt32)(max_delay_size * left_delay * left_delay * tmp);
-  if(rdel>max_delay_size) rdel = max_delay_size;
-  if(rdel<4) rdel=4;
+	switch (int(fParam1 * 17.9f)) //fixed left/right ratios
+	{
+	case  17: tmp = 0.5000f; break;
+	case  16: tmp = 0.6667f; break;
+	case  15: tmp = 0.7500f; break;
+	case  14: tmp = 0.8333f; break;
+	case  13: tmp = 1.0000f; break;
+	case  12: tmp = 1.2000f; break;
+	case  11: tmp = 1.3333f; break;
+	case  10: tmp = 1.5000f; break;
+	case   9: tmp = 2.0000f; break;
+	default: tmp = 4.0f * fParam1; break; //variable ratio
+	}
 
-  fil = fParam3;
+	rdel = (VstInt32)(max_delay_size * left_delay * left_delay * tmp);
+	if (rdel > max_delay_size) rdel = max_delay_size;
+	if (rdel < 4) rdel = 4;
 
-  if(fParam3>0.5f)  //simultaneously change crossover frequency & high/low mix
-  {
-    fil = 0.5f * fil - 0.25f; 
-    lmix = -2.0f * fil;
-    hmix = 1.0f;
-  }
-  else 
-  { 
-    hmix = 2.0f * fil; 
-    lmix = 1.0f - hmix;
-  }
-  fil = (float)exp(-6.2831853f * pow(10.0f, 2.2f + 4.5f * fil) / getSampleRate());
+	fil = fParam3;
 
-  fbk = 0.495f * fParam2;
-  wet = 1.0f - fParam4;
-  wet = fParam5 * (1.0f - wet * wet); //-3dB at 50% mix
-  dry = fParam5 * 2.0f * (1.0f - fParam4 * fParam4);
+	if (fParam3 > 0.5f)  //simultaneously change crossover frequency & high/low mix
+	{
+		fil = 0.5f * fil - 0.25f;
+		lmix = -2.0f * fil;
+		hmix = 1.0f;
+	}
+	else
+	{
+		hmix = 2.0f * fil;
+		lmix = 1.0f - hmix;
+	}
+	fil = (float)exp(-6.2831853f * pow(10.0f, 2.2f + 4.5f * fil) / getSampleRate());
 
-  //if(fParam2>0.99) { fbk=0.5f; wet=0.0f; } //freeze
+	fbk = 0.495f * fParam2;
+	wet = 1.0f - fParam4;
+	wet = fParam5 * (1.0f - wet * wet); //-3dB at 50% mix
+	dry = fParam5 * 2.0f * (1.0f - fParam4 * fParam4);
+
+	//if(fParam2>0.99) { fbk=0.5f; wet=0.0f; } //freeze
 }
 
 mdaDelay::~mdaDelay()
 {
-	if(buffer) delete [] buffer;
+	if (buffer) delete[] buffer;
 }
 
 void mdaDelay::suspend()
@@ -117,43 +117,43 @@ void mdaDelay::getProgramName(char *name)
 	strcpy(name, programName);
 }
 
-bool mdaDelay::getProgramNameIndexed (VstInt32 category, VstInt32 index, char* name)
+bool mdaDelay::getProgramNameIndexed(VstInt32 category, VstInt32 index, char* name)
 {
-	if (index == 0) 
+	if (index == 0)
 	{
-	    strcpy(name, programName);
-	    return true;
+		strcpy(name, programName);
+		return true;
 	}
 	return false;
 }
 
 float mdaDelay::getParameter(VstInt32 index)
 {
-	float v=0;
+	float v = 0;
 
-  switch(index)
-  {
-    case 0: v = left_delay; break;
-    case 1: v = fParam1; break;
-    case 2: v = fParam2; break;
-    case 3: v = fParam3; break;
-    case 4: v = fParam4; break;
-    case 5: v = fParam5; break;
-  }
-  return v;
+	switch (index)
+	{
+	case 0: v = left_delay; break;
+	case 1: v = fParam1; break;
+	case 2: v = fParam2; break;
+	case 3: v = fParam3; break;
+	case 4: v = fParam4; break;
+	case 5: v = fParam5; break;
+	}
+	return v;
 }
 
 void mdaDelay::getParameterName(VstInt32 index, char *label)
 {
-	switch(index)
-  {
-    case 0: strcpy(label, "L Delay "); break;
-    case 1: strcpy(label, "R Delay "); break;
-    case 2: strcpy(label, "Feedback"); break;
-    case 3: strcpy(label, "Fb Tone "); break;
-    case 4: strcpy(label, "FX Mix  "); break;
-    case 5: strcpy(label, "Output  "); break;
-  }
+	switch (index)
+	{
+	case 0: strcpy(label, "L Delay "); break;
+	case 1: strcpy(label, "R Delay "); break;
+	case 2: strcpy(label, "Feedback"); break;
+	case 3: strcpy(label, "Fb Tone "); break;
+	case 4: strcpy(label, "FX Mix  "); break;
+	case 5: strcpy(label, "Output  "); break;
+	}
 }
 
 #include <stdio.h>
@@ -161,26 +161,26 @@ void int2strng(VstInt32 value, char *string) { sprintf(string, "%d", value); }
 
 void mdaDelay::getParameterDisplay(VstInt32 index, char *text)
 {
-	switch(index)
-  {
-    case 0: int2strng((VstInt32)(ldel * 1000.0f / getSampleRate()), text); break;
-    case 1: int2strng((VstInt32)(100 * rdel / ldel), text); break;
-    case 2: int2strng((VstInt32)(99 * fParam2), text); break;
-    case 3: int2strng((VstInt32)(200 * fParam3 - 100), text); break;
-    case 4: int2strng((VstInt32)(100 * fParam4), text); break;
-    case 5: int2strng((VstInt32)(20 * log10(2.0 * fParam5)), text); break;
-  }
+	switch (index)
+	{
+	case 0: int2strng((VstInt32)(ldel * 1000.0f / getSampleRate()), text); break;
+	case 1: int2strng((VstInt32)(100 * rdel / ldel), text); break;
+	case 2: int2strng((VstInt32)(99 * fParam2), text); break;
+	case 3: int2strng((VstInt32)(200 * fParam3 - 100), text); break;
+	case 4: int2strng((VstInt32)(100 * fParam4), text); break;
+	case 5: int2strng((VstInt32)(20 * log10(2.0 * fParam5)), text); break;
+	}
 }
 
 void mdaDelay::getParameterLabel(VstInt32 index, char *label)
 {
-	switch(index)
-  {
-    case 0:  strcpy(label, "ms"); break;
-    case 3:  strcpy(label, "Lo <> Hi"); break;
-    case 5:  strcpy(label, "dB"); break;
-    default: strcpy(label, "%"); break;
-  }
+	switch (index)
+	{
+	case 0:  strcpy(label, "ms"); break;
+	case 3:  strcpy(label, "Lo <> Hi"); break;
+	case 5:  strcpy(label, "dB"); break;
+	default: strcpy(label, "%"); break;
+	}
 }
 
 //--------------------------------------------------------------------------------
@@ -204,8 +204,9 @@ void mdaDelay::process(float **inputs, float **outputs, VstInt32 sampleFrames)
 
 	// Variables to store the current parameters of the plugin
 	float wet_ratio = wet, dry_ratio = dry, feedback = fbk;
-	
+
 	float low_mix = lmix, high_mix = hmix;
+
 	float f = fil, f0 = fil0, tmp;
 
 	VstInt32 i = ipos, l, r;
@@ -241,7 +242,7 @@ void mdaDelay::process(float **inputs, float **outputs, VstInt32 sampleFrames)
 		f0 = f * (f0 - tmp) + tmp;
 
 		// Delay input
-		*(buffer + i) = low_mix * f0 + high_mix* tmp;
+		*(buffer + i) = low_mix * f0 + high_mix * tmp;
 
 		i--; if (i < 0) i = max_delay_size;
 		l--; if (l < 0) l = max_delay_size;
